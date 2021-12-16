@@ -16,6 +16,9 @@ param applicationName string
 ])
 param location string = 'westeurope'
 
+@description('Run deployment script')
+param runDeployScript bool = false
+
 var applicationNameWithoutDashes = '${replace(applicationName,'-','')}'
 var resourceGroupName = 'rg-${applicationNameWithoutDashes}'
 var aksName = '${take('aks-${applicationNameWithoutDashes}',20)}'
@@ -63,6 +66,25 @@ module eventhub 'modules/eventhub.bicep' = {
   params: {
     eventHubNameSpaceName: eventHubNameSpaceName
   }
+}
+
+module script 'modules/script.bicep' = if(runDeployScript) {
+  scope: resourceGroup(rg.name)
+  name: 'scriptDeployment'
+  params:{
+    storageKey: storage.outputs.storageKey
+    storageName: storage.outputs.storageName
+    acrName: acrName
+    aksName: aksName
+    eventHubConnectionString: eventhub.outputs.eventHubConnectionString
+  }
+
+  dependsOn: [
+    aks
+    acr
+    storage
+    eventhub
+  ]
 }
 
 output acrName string = acrName
