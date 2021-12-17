@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.4.1124.51302",
-      "templateHash": "459342055820311830"
+      "templateHash": "10412133720772596959"
     }
   },
   "parameters": {
@@ -21,8 +21,7 @@
       "allowedValues": [
         "westeurope",
         "northeurope",
-        "westus",
-        "swedencentral"
+        "westus"
       ],
       "metadata": {
         "description": "Location of resources"
