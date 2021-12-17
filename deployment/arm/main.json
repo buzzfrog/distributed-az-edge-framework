@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.4.1124.51302",
-      "templateHash": "8264896014259407407"
+      "templateHash": "459342055820311830"
     }
   },
   "parameters": {
@@ -429,7 +429,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.4.1124.51302",
-              "templateHash": "4813932712882546325"
+              "templateHash": "4178768935484675502"
             }
           },
           "parameters": {
@@ -537,7 +537,7 @@
                     "value": "[uniqueString(resourceGroup().name)]"
                   }
                 ],
-                "scriptContent": "#!/bin/bash\ngit clone --single-branch --branch deploy-to-azure https://github.com/buzzfrog/distributed-az-edge-framework.git gitsource\n# sometime get an error if I don't wait\nsleep 30\n\ncd ./gitsource/iotedge/Distributed.IoT.Edge\nDATAGATEWAYIMAGE=datagatewaymodule:$TAG\nSIMTEMPIMAGE=simulatedtemperaturesensormodule:$TAG\naz acr build --image $DATAGATEWAYIMAGE --registry $ACRNAME --file Distributed.IoT.Edge.DataGatewayModule/Dockerfile .\naz acr build --image $SIMTEMPIMAGE --registry $ACRNAME --file Distributed.IoT.Edge.SimulatedTemperatureSensorModule/Dockerfile .\n\naz aks install-cli\n\ncurl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3\nchmod 700 get_helm.sh\n./get_helm.sh\n\naz aks get-credentials --admin --name $AKSNAME --resource-group $RESOURCEGROUPNAME --overwrite-existing\n\n#----- Dapr\nhelm repo add dapr https://dapr.github.io/helm-charts/\nhelm repo update\nhelm upgrade --install dapr dapr/dapr \\\n    --version=1.5 \\\n    --namespace dapr-system \\\n    --create-namespace \\\n    --wait\n\n#----- Redis\nhelm repo add bitnami https://charts.bitnami.com/bitnami\nhelm repo update\nhelm install redis bitnami/redis --set cluster.enabled=false --wait\n\nDATAGATEWAYIMAGEFULL=\"${ACRNAME}.azurecr.io/${DATAGATEWAYIMAGE}\"\nSIMTEMPIMAGEFULL=\"${ACRNAME}.azurecr.io/${SIMTEMPIMAGE}\"\n\nhelm install iot-edge-accelerator ../../deployment/helm/iot-edge-accelerator --set-string images.datagatewaymodule=$DATAGATEWAYIMAGEFULL --set-string images.simulatedtemperaturesensormodule=$SIMTEMPIMAGEFULL --set-string dataGatewayModule.eventHubConnectionString=$EVENTHUB_CONNECTIONSTRING --set-string dataGatewayModule.storageAccountName=$STORAGENAME --set-string dataGatewayModule.storageAccountKey=$STORAGEKEY --wait\n",
+                "scriptContent": "#!/bin/bash\ngit clone --single-branch --branch deploy-to-azure https://github.com/buzzfrog/distributed-az-edge-framework.git gitsource\n# sometime get an error if I don't wait\nsleep 30\n\ncd ./gitsource/iotedge/Distributed.IoT.Edge\nDATAGATEWAYIMAGE=datagatewaymodule:$TAG\nSIMTEMPIMAGE=simulatedtemperaturesensormodule:$TAG\naz acr build --image $DATAGATEWAYIMAGE --registry $ACRNAME --file Distributed.IoT.Edge.DataGatewayModule/Dockerfile .\naz acr build --image $SIMTEMPIMAGE --registry $ACRNAME --file Distributed.IoT.Edge.SimulatedTemperatureSensorModule/Dockerfile .\n\naz aks install-cli\n\ncurl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3\nchmod 700 get_helm.sh\n./get_helm.sh\n\naz aks get-credentials --admin --name $AKSNAME --resource-group $RESOURCEGROUPNAME --overwrite-existing\n\n#----- Dapr\nhelm repo add dapr https://dapr.github.io/helm-charts/\nhelm repo update\nhelm upgrade --install dapr dapr/dapr \\\n    --version=1.5 \\\n    --namespace dapr-system \\\n    --create-namespace \\\n    --wait\n\n#----- Redis\nhelm repo add bitnami https://charts.bitnami.com/bitnami\nhelm repo update\nhelm install redis bitnami/redis --wait\n\nDATAGATEWAYIMAGEFULL=\"${ACRNAME}.azurecr.io/${DATAGATEWAYIMAGE}\"\nSIMTEMPIMAGEFULL=\"${ACRNAME}.azurecr.io/${SIMTEMPIMAGE}\"\n\nhelm install iot-edge-accelerator ../../deployment/helm/iot-edge-accelerator --set-string images.datagatewaymodule=$DATAGATEWAYIMAGEFULL --set-string images.simulatedtemperaturesensormodule=$SIMTEMPIMAGEFULL --set-string dataGatewayModule.eventHubConnectionString=$EVENTHUB_CONNECTIONSTRING --set-string dataGatewayModule.storageAccountName=$STORAGENAME --set-string dataGatewayModule.storageAccountKey=$STORAGEKEY --wait\n",
                 "cleanupPreference": "Always",
                 "retentionInterval": "P1D"
               },

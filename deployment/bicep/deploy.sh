@@ -29,7 +29,7 @@ helm upgrade --install dapr dapr/dapr \
 #----- Redis
 helm repo add bitnami https://charts.bitnami.com/bitnami
 helm repo update
-helm install redis bitnami/redis --set cluster.enabled=false --wait
+helm install redis bitnami/redis --wait
 
 DATAGATEWAYIMAGEFULL="${ACRNAME}.azurecr.io/${DATAGATEWAYIMAGE}"
 SIMTEMPIMAGEFULL="${ACRNAME}.azurecr.io/${SIMTEMPIMAGE}"
