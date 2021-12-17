@@ -1,0 +1,586 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.4.1124.51302",
+      "templateHash": "1626281547583314584"
+    }
+  },
+  "parameters": {
+    "applicationName": {
+      "type": "string",
+      "metadata": {
+        "description": "The common name for this application"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "westeurope",
+      "allowedValues": [
+        "westeurope",
+        "northeurope",
+        "westus",
+        "swedencentral"
+      ],
+      "metadata": {
+        "description": "Location of resources"
+      }
+    },
+    "runDeployScript": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Run deployment script"
+      }
+    }
+  },
+  "variables": {
+    "applicationNameWithoutDashes": "[format('{0}', replace(parameters('applicationName'), '-', ''))]",
+    "resourceGroupName": "[format('rg-{0}', variables('applicationNameWithoutDashes'))]",
+    "aksName": "[format('{0}', take(format('aks-{0}', variables('applicationNameWithoutDashes')), 20))]",
+    "acrName": "[format('acr{0}', variables('applicationNameWithoutDashes'))]",
+    "storageAccountName": "[format('st{0}', take(variables('applicationNameWithoutDashes'), 14))]",
+    "eventHubNameSpaceName": "[format('evh{0}', take(variables('applicationNameWithoutDashes'), 14))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2020-10-01",
+      "name": "[variables('resourceGroupName')]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2020-10-01",
+      "name": "aksDeployment",
+      "resourceGroup": "[variables('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "aksName": {
+            "value": "[variables('aksName')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.4.1124.51302",
+              "templateHash": "18078532993489501684"
+            }
+          },
+          "parameters": {
+            "aksName": {
+              "type": "string",
+              "metadata": {
+                "description": "AKS Name"
+              },
+              "maxLength": 20
+            },
+            "osDiskSizeGB": {
+              "type": "int",
+              "defaultValue": 0,
+              "maxValue": 1023,
+              "minValue": 0
+            },
+            "agentCount": {
+              "type": "int",
+              "defaultValue": 3,
+              "maxValue": 50,
+              "minValue": 1
+            },
+            "agentVMSize": {
+              "type": "string",
+              "defaultValue": "Standard_B4ms"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ContainerService/managedClusters",
+              "apiVersion": "2020-09-01",
+              "name": "[parameters('aksName')]",
+              "location": "[resourceGroup().location]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "enableRBAC": true,
+                "dnsPrefix": "[uniqueString(parameters('aksName'))]",
+                "agentPoolProfiles": [
+                  {
+                    "name": "agentpool",
+                    "enableAutoScaling": false,
+                    "osDiskSizeGB": "[parameters('osDiskSizeGB')]",
+                    "count": "[parameters('agentCount')]",
+                    "vmSize": "[parameters('agentVMSize')]",
+                    "osType": "Linux",
+                    "mode": "System"
+                  }
+                ],
+                "servicePrincipalProfile": {
+                  "clientId": "msi"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "controlPlaneFQDN": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ContainerService/managedClusters', parameters('aksName'))).fqdn]"
+            },
+            "aksName": {
+              "type": "string",
+              "value": "[parameters('aksName')]"
+            },
+            "clusterPrincipalID": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ContainerService/managedClusters', parameters('aksName'))).identityProfile.kubeletidentity.objectId]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('resourceGroupName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2020-10-01",
+      "name": "acrDeployment",
+      "resourceGroup": "[variables('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "acrName": {
+            "value": "[variables('acrName')]"
+          },
+          "aksPrincipalId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'aksDeployment'), '2020-10-01').outputs.clusterPrincipalID.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.4.1124.51302",
+              "templateHash": "18295599602263396445"
+            }
+          },
+          "parameters": {
+            "acrName": {
+              "type": "string",
+              "maxLength": 20,
+              "metadata": {
+                "description": "ACR Name"
+              }
+            },
+            "aksPrincipalId": {
+              "type": "string",
+              "metadata": {
+                "description": "The principal ID of the AKS cluster"
+              }
+            },
+            "roleAcrPull": {
+              "type": "string",
+              "defaultValue": "b24988ac-6180-42a0-ab88-20f7382dd24c",
+              "allowedValues": [
+                "b24988ac-6180-42a0-ab88-20f7382dd24c",
+                "acdd72a7-3385-48ef-bd42-f606fba81ae7"
+              ]
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ContainerRegistry/registries",
+              "apiVersion": "2021-06-01-preview",
+              "name": "[parameters('acrName')]",
+              "location": "[resourceGroup().location]",
+              "sku": {
+                "name": "Standard"
+              },
+              "properties": {
+                "adminUserEnabled": true
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2020-04-01-preview",
+              "scope": "[format('Microsoft.ContainerRegistry/registries/{0}', parameters('acrName'))]",
+              "name": "[guid(resourceGroup().id, parameters('acrName'), parameters('aksPrincipalId'), 'AssignAcrPullToAks')]",
+              "properties": {
+                "description": "Assign AcrPull role to AKS",
+                "principalId": "[parameters('aksPrincipalId')]",
+                "principalType": "ServicePrincipal",
+                "roleDefinitionId": "[format('/subscriptions/{0}/providers/Microsoft.Authorization/roleDefinitions/{1}', subscription().subscriptionId, parameters('roleAcrPull'))]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName'))]"
+              ]
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'aksDeployment')]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('resourceGroupName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2020-10-01",
+      "name": "storageDeployment",
+      "resourceGroup": "[variables('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "storageAccountName": {
+            "value": "[variables('storageAccountName')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.4.1124.51302",
+              "templateHash": "1118457582806931156"
+            }
+          },
+          "parameters": {
+            "storageAccountName": {
+              "type": "string"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Storage/storageAccounts",
+              "apiVersion": "2021-04-01",
+              "name": "[parameters('storageAccountName')]",
+              "location": "[resourceGroup().location]",
+              "sku": {
+                "name": "Standard_LRS"
+              },
+              "kind": "StorageV2",
+              "properties": {
+                "accessTier": "Hot"
+              }
+            }
+          ],
+          "outputs": {
+            "storageKey": {
+              "type": "string",
+              "value": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2021-04-01').keys[0].value]"
+            },
+            "storageName": {
+              "type": "string",
+              "value": "[parameters('storageAccountName')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('resourceGroupName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2020-10-01",
+      "name": "eventHubDeployment",
+      "resourceGroup": "[variables('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "eventHubNameSpaceName": {
+            "value": "[variables('eventHubNameSpaceName')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.4.1124.51302",
+              "templateHash": "9199500016495226911"
+            }
+          },
+          "parameters": {
+            "eventHubNameSpaceName": {
+              "type": "string",
+              "metadata": {
+                "description": "AKS Name"
+              },
+              "maxLength": 20
+            }
+          },
+          "variables": {
+            "eventHubName": "[format('{0}hub', parameters('eventHubNameSpaceName'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.EventHub/namespaces",
+              "apiVersion": "2021-01-01-preview",
+              "name": "[parameters('eventHubNameSpaceName')]",
+              "location": "[resourceGroup().location]",
+              "sku": {
+                "name": "Standard",
+                "tier": "Standard",
+                "capacity": 1
+              },
+              "properties": {
+                "zoneRedundant": false
+              }
+            },
+            {
+              "type": "Microsoft.EventHub/namespaces/eventhubs",
+              "apiVersion": "2021-01-01-preview",
+              "name": "[format('{0}/{1}', parameters('eventHubNameSpaceName'), variables('eventHubName'))]",
+              "properties": {
+                "messageRetentionInDays": 7,
+                "partitionCount": 1
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.EventHub/namespaces', parameters('eventHubNameSpaceName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.EventHub/namespaces/eventhubs/authorizationRules",
+              "apiVersion": "2021-01-01-preview",
+              "name": "[format('{0}/{1}/{2}', parameters('eventHubNameSpaceName'), variables('eventHubName'), 'iot-edge')]",
+              "properties": {
+                "rights": [
+                  "Listen",
+                  "Send"
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.EventHub/namespaces', parameters('eventHubNameSpaceName'))]",
+                "[resourceId('Microsoft.EventHub/namespaces/eventhubs', parameters('eventHubNameSpaceName'), variables('eventHubName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "eventHubConnectionString": {
+              "type": "string",
+              "value": "[listKeys(resourceId('Microsoft.EventHub/namespaces/eventhubs/authorizationRules', parameters('eventHubNameSpaceName'), variables('eventHubName'), 'iot-edge'), '2021-01-01-preview').primaryConnectionString]"
+            },
+            "eventHubName": {
+              "type": "string",
+              "value": "[variables('eventHubName')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('resourceGroupName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('runDeployScript')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2020-10-01",
+      "name": "scriptDeployment",
+      "resourceGroup": "[variables('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "storageKey": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'storageDeployment'), '2020-10-01').outputs.storageKey.value]"
+          },
+          "storageName": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'storageDeployment'), '2020-10-01').outputs.storageName.value]"
+          },
+          "acrName": {
+            "value": "[variables('acrName')]"
+          },
+          "aksName": {
+            "value": "[variables('aksName')]"
+          },
+          "eventHubConnectionString": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'eventHubDeployment'), '2020-10-01').outputs.eventHubConnectionString.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.4.1124.51302",
+              "templateHash": "18189236083567172715"
+            }
+          },
+          "parameters": {
+            "aksName": {
+              "type": "string",
+              "metadata": {
+                "description": "AKS Name"
+              },
+              "maxLength": 20
+            },
+            "acrName": {
+              "type": "string",
+              "metadata": {
+                "description": "ACR Name"
+              },
+              "maxLength": 20
+            },
+            "eventHubConnectionString": {
+              "type": "string",
+              "metadata": {
+                "description": "EventHub Connection String"
+              }
+            },
+            "storageName": {
+              "type": "string",
+              "metadata": {
+                "description": "Storage Account Name"
+              },
+              "maxLength": 20
+            },
+            "storageKey": {
+              "type": "string",
+              "metadata": {
+                "description": "Storage Account Key"
+              }
+            }
+          },
+          "variables": {
+            "userAssignedIdentityName": "Deployer",
+            "roleAssignmentName": "[guid(resourceGroup().id, 'contributor')]",
+            "contributorRoleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]",
+            "deploymentScriptName": "DeploymentScript"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "apiVersion": "2018-11-30",
+              "name": "[variables('userAssignedIdentityName')]",
+              "location": "[resourceGroup().location]"
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2020-04-01-preview",
+              "name": "[variables('roleAssignmentName')]",
+              "properties": {
+                "roleDefinitionId": "[variables('contributorRoleDefinitionId')]",
+                "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('userAssignedIdentityName'))).principalId]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('userAssignedIdentityName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Resources/deploymentScripts",
+              "apiVersion": "2020-10-01",
+              "name": "[variables('deploymentScriptName')]",
+              "location": "[resourceGroup().location]",
+              "kind": "AzureCLI",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('userAssignedIdentityName')))]": {}
+                }
+              },
+              "properties": {
+                "azCliVersion": "2.30.0",
+                "environmentVariables": [
+                  {
+                    "name": "RESOURCEGROUPNAME",
+                    "value": "[resourceGroup().name]"
+                  },
+                  {
+                    "name": "AKSNAME",
+                    "value": "[parameters('aksName')]"
+                  },
+                  {
+                    "name": "ACRNAME",
+                    "value": "[parameters('acrName')]"
+                  },
+                  {
+                    "name": "EVENTHUB_CONNECTIONSTRING",
+                    "value": "[parameters('eventHubConnectionString')]"
+                  },
+                  {
+                    "name": "STORAGENAME",
+                    "value": "[parameters('storageName')]"
+                  },
+                  {
+                    "name": "STORAGEKEY",
+                    "value": "[parameters('storageKey')]"
+                  },
+                  {
+                    "name": "TAG",
+                    "value": "[uniqueString(resourceGroup().name)]"
+                  }
+                ],
+                "scriptContent": "#!/bin/bash\ngit clone --single-branch --branch deploy-to-azure https://github.com/buzzfrog/distributed-az-edge-framework.git gitsource\nsleep 15\n\ncd ./gitsource/iotedge/Distributed.IoT.Edge\nDATAGATEWAYIMAGE=datagatewaymodule:$TAG\nSIMTEMPIMAGE=simulatedtemperaturesensormodule:$TAG\naz acr build --image $DATAGATEWAYIMAGE --registry $ACRNAME --file Distributed.IoT.Edge.DataGatewayModule/Dockerfile .\naz acr build --image $SIMTEMPIMAGE --registry $ACRNAME --file Distributed.IoT.Edge.SimulatedTemperatureSensorModule/Dockerfile .\n\naz aks install-cli\n\ncurl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3\nchmod 700 get_helm.sh\n./get_helm.sh\n\naz aks get-credentials --admin --name $AKSNAME --resource-group $RESOURCEGROUPNAME --overwrite-existing\n\n#----- Dapr\nhelm repo add dapr https://dapr.github.io/helm-charts/\nhelm repo update\nhelm upgrade --install dapr dapr/dapr \\\n    --version=1.5 \\\n    --namespace dapr-system \\\n    --create-namespace \\\n    --wait\n\n#----- Redis\nhelm repo add bitnami https://charts.bitnami.com/bitnami\nhelm repo update\nhelm install redis bitnami/redis --set cluster.enabled=false --wait\n\nDATAGATEWAYIMAGEFULL=\"${ACRNAME}.azurecr.io/${DATAGATEWAYIMAGE}\"\nSIMTEMPIMAGEFULL=\"${ACRNAME}.azurecr.io/${SIMTEMPIMAGE}\"\n\nhelm install iot-edge-accelerator ../../deployment/helm/iot-edge-accelerator --set-string images.datagatewaymodule=$DATAGATEWAYIMAGEFULL --set-string images.simulatedtemperaturesensormodule=$SIMTEMPIMAGEFULL --set-string dataGatewayModule.eventHubConnectionString=$EVENTHUB_CONNECTIONSTRING --set-string dataGatewayModule.storageAccountName=$STORAGENAME --set-string dataGatewayModule.storageAccountKey=$STORAGEKEY --wait\n",
+                "cleanupPreference": "Always",
+                "retentionInterval": "P1D"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('userAssignedIdentityName'))]"
+              ]
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'acrDeployment')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'aksDeployment')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'eventHubDeployment')]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('resourceGroupName'))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'storageDeployment')]"
+      ]
+    }
+  ],
+  "outputs": {
+    "acrName": {
+      "type": "string",
+      "value": "[variables('acrName')]"
+    },
+    "aksName": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'aksDeployment'), '2020-10-01').outputs.aksName.value]"
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "value": "[variables('resourceGroupName')]"
+    },
+    "storageKey": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'storageDeployment'), '2020-10-01').outputs.storageKey.value]"
+    },
+    "storageName": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'storageDeployment'), '2020-10-01').outputs.storageName.value]"
+    },
+    "eventHubConnectionString": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'eventHubDeployment'), '2020-10-01').outputs.eventHubConnectionString.value]"
+    }
+  }
+}
