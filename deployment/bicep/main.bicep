@@ -12,7 +12,6 @@ param applicationName string
   'westeurope'
   'northeurope'
   'westus'
-  'swedencentral'
 ])
 param location string = 'westeurope'
 
