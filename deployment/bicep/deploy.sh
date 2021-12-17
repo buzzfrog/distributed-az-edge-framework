@@ -1,6 +1,7 @@
 #!/bin/bash
 git clone --single-branch --branch deploy-to-azure https://github.com/buzzfrog/distributed-az-edge-framework.git gitsource
-sleep 15
+# sometime get an error if I don't wait
+sleep 30
 
 cd ./gitsource/iotedge/Distributed.IoT.Edge
 DATAGATEWAYIMAGE=datagatewaymodule:$TAG

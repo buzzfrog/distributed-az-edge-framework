@@ -82,7 +82,7 @@ resource deploymentScript 'Microsoft.Resources/deploymentScripts@2020-10-01' = {
       }
     ]
   scriptContent: loadTextContent('../deploy.sh')
-  cleanupPreference: 'OnSuccess'
+  cleanupPreference: 'Always'
   retentionInterval: 'P1D'
   }
 }
